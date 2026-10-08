@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>エレモン Mobile Edition</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0c10;
+            color: #ffffff;
+            font-family: 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        /* スマホ縦画面フレーム (390px x 844px) */
+        #game-wrapper {
+            position: relative;
+            width: 390px;
+            height: 844px;
+            max-width: 100vw;
+            max-height: 100vh;
+            border: 2px solid #45a29e;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.9), 0 0 10px rgba(69, 162, 158, 0.3);
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 12px;
+        }
+
+        /* 敵UI（上部） */
+        .enemy-ui-box {
+            align-self: center;
+            background: rgba(11, 12, 16, 0.88);
+            border: 1px solid #ff6b6b;
+            padding: 8px 12px;
+            border-radius: 8px;
+            width: 95%;
+            text-align: center;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.3);
+            margin-top: 5px;
+        }
+
+        .enemy-cmd-list {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 5px;
+            flex-wrap: wrap;
+        }
+        .enemy-cmd-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+            color: #fff;
+        }
+        .enemy-cmd-badge.disabled {
+            opacity: 0.25;
+            border-color: #555;
+            background: rgba(50, 50, 50, 0.2);
+            color: #888;
+        }
+
+        /* 中央：対戦開示UIバナー */
+        #matchup-banner {
+            position: absolute;
+            top: 440px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ffd700;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+            z-index: 10;
+            width: 85%;
+            white-space: nowrap;
+        }
+        .cmd-display { color: #ffffff; transition: all 0.3s; }
+        .cmd-display.highlight { color: #ffd700; font-size: 16px; text-shadow: 0 0 10px #ffd700; }
+        .cmd-display.status-change { color: #ff5555; animation: pulse 0.5s infinite alternate; }
+
+        @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
+
+        /* 味方UI（中央下部） */
+        .player-ui-box {
+            align-self: center;
+            background: rgba(11, 12, 16, 0.9);
+            border: 2px solid #66fcf1;
+            padding: 8px 12px;
+            border-radius: 10px;
+            width: 95%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 0 12px rgba(102, 252, 241, 0.3);
+            margin-bottom: 8px;
+        }
+        .player-icon-frame {
+            width: 46px;
+            height: 46px;
+            border-radius: 6px;
+            border: 1px solid #66fcf1;
+            background: #1f2833;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .player-icon-frame img { width: 100%; height: 100%; object-fit: cover; }
+
+        .bar-container {
+            background-color: #111;
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #333;
+            margin: 2px 0;
+        }
+        .hp-bar-fill { background: linear-gradient(90deg, #2ecc71, #27ae60); height: 100%; width: 100%; transition: width 0.3s; }
+        .mp-bar-fill { background: linear-gradient(90deg, #3498db, #2980b9); height: 100%; width: 100%; transition: width 0.3s; }
+
+        /* 下部パネル：ログ＆操作エリア */
+        .bottom-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: 220px;
+            pointer-events: auto;
+            width: 100%;
+        }
+
+        #log-area {
+            height: 80px;
+            background: rgba(11, 12, 16, 0.92);
+            border: 1px solid #45a29e;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            line-height: 1.4;
+            overflow-y: auto;
+            color: #c5c6c7;
+        }
+
+        .action-container {
+            flex: 1;
+            background: rgba(11, 12, 16, 0.95);
+            border: 1px solid #45a29e;
+            border-radius: 6px;
+            padding: 8px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .command-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+        
+        .command-btn {
+            padding: 10px 4px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid #45a29e;
+            border-radius: 6px;
+            background: #1f2833;
+            color: #ffffff;
+            transition: all 0.15s;
+            font-weight: bold;
+        }
+        .command-btn:hover:not(:disabled) { background: #45a29e; color: #0b0c10; }
+        .command-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: #333; pointer-events: none; }
+
+        .btn-attack { border-color: #e74c3c; color: #ff8b8b; }
+        .btn-magic { border-color: #9b59b6; color: #e8a7f5; }
+        .btn-barrier { border-color: #2980b9; color: #85c1e9; }
+        .btn-charge { border-color: #f1c40f; color: #f9e79f; }
+        .btn-switch { border-color: #2ecc71; color: #e8f8f5; background: #27ae60; width: 100%; }
+
+        #reset-btn {
+            display: none;
+            padding: 12px 20px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            pointer-events: auto;
+        }
+
+        .select-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            max-height: 100px;
+            overflow-y: auto;
+            width: 100%;
+            margin-bottom: 6px;
+        }
+        .select-card {
+            background: #1f2833;
+            border: 1px solid #45a29e;
+            border-radius: 4px;
+            padding: 4px 2px;
+            font-size: 10px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .select-card.selected { border-color: #ffd700; background: #0b0c10; color: #ffd700; font-weight: bold; }
+
+        .attribute { font-size: 10px; padding: 1px 5px; border-radius: 3px; color: white; font-weight: bold; }
+        .at-attack { background: #e74c3c; }
+        .at-magic { background: #9b59b6; }
+        .at-barrier { background: #2980b9; }
+
+        .log-player { color: #66fcf1; }
+        .log-enemy { color: #ff6b6b; }
+        .log-system { color: #aaa; font-style: italic; }
+        .log-win { color: #ffd700; font-weight: bold; }
+        .log-lose { color: #e74c3c; }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="390" height="844"></canvas>
+
+        <div id="ui-layer">
+            <!-- 上部：敵情報UI -->
+            <div class="enemy-ui-box">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span id="e-name" style="font-weight:bold; font-size:14px;">-</span>
+                    <span id="e-attr" class="attribute at-barrier">-</span>
+                </div>
+                <div class="bar-container"><div id="e-hp-bar" class="hp-bar-fill"></div></div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; color:#ccc;">
+                    <span id="e-hp-text">HP: -/-</span>
+                    <span id="e-mp-text">MP: -/-</span>
+                </div>
+                <!-- 敵のターン使用可能コマンド一覧 -->
+                <div id="enemy-cmd-list" class="enemy-cmd-list"></div>
+            </div>
+
+            <!-- 中央：対戦開示UIバナー -->
+            <div id="matchup-banner">
+                <span id="banner-p-cmd" class="cmd-display">【こうげき】</span>
+                <span style="color:#888;">VS</span>
+                <span id="banner-e-cmd" class="cmd-display">【まほう】</span>
+            </div>
+
+            <div>
+                <!-- 中央下部：味方情報UI -->
+                <div class="player-ui-box">
+                    <div class="player-icon-frame" id="p-icon-box">
+                        <span id="p-icon-fallback" style="font-size:10px;">Icon</span>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                            <span id="p-name" style="font-weight:bold; font-size:14px;">-</span>
+                            <span id="p-attr" class="attribute at-attack">-</span>
+                        </div>
+                        <div class="bar-container"><div id="p-hp-bar" class="hp-bar-fill"></div></div>
+                        <div class="bar-container" style="height:5px;"><div id="p-mp-bar" class="mp-bar-fill"></div></div>
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#ccc; margin-top:2px;">
+                            <span id="p-hp-text">HP: -/-</span>
+                            <span id="p-mp-text">MP: -/-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 下部：ログ ＆ 操作パネル -->
+                <div class="bottom-panel">
+                    <div id="log-area"></div>
+
+                    <div class="action-container">
+                        <div id="command-area" style="width: 100%;">
+                            <div class="command-row">
+                                <button id="btn-ATK" class="command-btn btn-attack" onclick="playerAction('ATK')">攻撃</button>
+                                <button id="btn-MAG" class="command-btn btn-magic" onclick="openMagicMenu()">魔法...</button>
+                                <button id="btn-BRR" class="command-btn btn-barrier" onclick="playerAction('BRR')">バリア</button>
+                                <button id="btn-CHG" class="command-btn btn-charge" onclick="playerAction('CHG')">チャージ</button>
+                            </div>
+                        </div>
+
+                        <div id="magic-select-area" style="display: none; width: 100%;">
+                            <div id="magic-buttons" class="command-row" style="margin-bottom: 6px;"></div>
+                            <button class="command-btn" style="width: 100%; padding: 6px;" onclick="closeMagicMenu()">戻る</button>
+                        </div>
+
+                        <div id="start-select-area" style="display: none; width: 100%;">
+                            <div style="font-size: 11px; color: #ffd700; text-align: center; margin-bottom: 4px;">
+                                3体選択 (<span id="select-count">0</span>/3)
+                            </div>
+                            <div id="character-grid" class="select-grid"></div>
+                            <button id="btn-start-battle" class="command-btn btn-switch" style="padding: 6px;" disabled onclick="confirmPartyAndStart()">バトル開始</button>
+                        </div>
+
+                        <div id="switch-area" style="display: none; width: 100%;">
+                            <div id="switch-buttons" style="display: flex; flex-direction: column; gap: 4px;"></div>
+                        </div>
+
+                        <button id="reset-btn" onclick="showStartSelect()">もう一度戦う</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SE 音声再生エンジン ---
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSE(type) {
+            initAudio();
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+
+            if (type === 'click') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, t); osc.frequency.exponentialRampToValueAtTime(400, t + 0.05);
+                gain.gain.setValueAtTime(0.2, t); gain.gain.linearRampToValueAtTime(0.01, t + 0.05);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.05);
+            } else if (type === 'attack') {
+                const bufferSize = audioCtx.sampleRate * 0.15;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(1000, t); filter.frequency.exponentialRampToValueAtTime(100, t + 0.15);
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.8, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                noise.start(t);
+            } else if (type === 'magic') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(300, t); osc.frequency.exponentialRampToValueAtTime(1200, t + 0.25);
+                gain.gain.setValueAtTime(0.4, t); gain.gain.linearRampToValueAtTime(0.01, t + 0.25);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.25);
+            } else if (type === 'win') {
+                [523.25, 659.25, 783.99, 1046.50].forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    const startTime = t + idx * 0.1;
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(f, startTime);
+                    gain.gain.setValueAtTime(0.3, startTime); gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(startTime); osc.stop(startTime + 0.3);
+                });
+            }
+        }
+
+        // --- マスターデータ ---
+        const masterMons = {
+            'ファイター': { name: 'ファイター', imgPaths: ['アタックタイプ モンスター/ファイター.png', 'アタックタイプモンスター/ファイター.png', 'ファイター.png'], maxHp: 140, maxMp: 20, atk: 22, matk: 4, spd: 12, luk: 1, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['ATK_DOWN', 'DEF_DOWN'] },
+            'ナイト': { name: 'ナイト', imgPaths: ['アタックタイプ モンスター/ナイト.png', 'アタックタイプモンスター/ナイト.png', 'ナイト.png'], maxHp: 155, maxMp: 25, atk: 20, matk: 5, spd: 9, luk: 2, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['ATK_DOWN', 'DEF_DOWN'] },
+            'ギン': { name: 'ギン', imgPaths: ['アタックタイプ モンスター/ギン.png', 'アタックタイプモンスター/ギン.png', 'ギン.png'], maxHp: 125, maxMp: 30, atk: 24, matk: 6, spd: 16, luk: 4, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['ATK_DOWN', 'CONFUSION'] },
+            'ダイダラボッチ': { name: 'ダイダラボッチ', imgPaths: ['アタックタイプ モンスター/ダイダラボッチ.png', 'アタックタイプモンスター/ダイダラボッチ.png', 'ダイダラボッチ.png'], maxHp: 180, maxMp: 15, atk: 26, matk: 2, spd: 6, luk: 1, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['DEF_DOWN', 'PARALYSIS'] },
+
+            'セイメイ': { name: 'セイメイ', imgPaths: ['バリアタイプモンスター/セイメイ.png', 'バリアタイプ モンスター/セイメイ.png', 'セイメイ.png'], maxHp: 110, maxMp: 50, atk: 12, matk: 12, spd: 10, luk: 3, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['ATK_DOWN', 'DEF_DOWN', 'PARALYSIS'] },
+            '魔鏡': { name: '魔鏡', imgPaths: ['バリアタイプモンスター/魔鏡.png', 'バリアタイプ モンスター/魔鏡.png', '魔鏡.png'], maxHp: 120, maxMp: 55, atk: 8, matk: 14, spd: 8, luk: 2, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['DEF_DOWN', 'CONFUSION'] },
+            'EXE-000': { name: 'EXE-000', imgPaths: ['バリアタイプモンスター/EXE000.png', 'バリアタイプ モンスター/EXE000.png', 'EXE000.png'], maxHp: 135, maxMp: 45, atk: 15, matk: 10, spd: 11, luk: 1, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['ATK_DOWN', 'PARALYSIS'] },
+            'ピエロ': { name: 'ピエロ', imgPaths: ['バリアタイプモンスター/ピエロ.png', 'バリアタイプ モンスター/ピエロ.png', 'ピエロ.png'], maxHp: 160, maxMp: 60, atk: 13, matk: 13, spd: 10, luk: 2, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['ATK_DOWN', 'DEF_DOWN', 'CONFUSION', 'PARALYSIS'] },
+
+            'ウィッチ': { name: 'ウィッチ', imgPaths: ['魔法タイプモンスター/ウィッチ.png', '魔法タイプ モンスター/ウィッチ.png', 'ウィッチ.png'], maxHp: 75, maxMp: 100, atk: 4, matk: 22, spd: 14, luk: 5, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['ATK_DOWN', 'DEF_DOWN', 'CONFUSION', 'PARALYSIS'] },
+            'ピクシー': { name: 'ピクシー', imgPaths: ['魔法タイプモンスター/ピクシー.png', '魔法タイプ モンスター/ピクシー.png', 'ピクシー.png'], maxHp: 70, maxMp: 110, atk: 3, matk: 20, spd: 18, luk: 6, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['CONFUSION', 'PARALYSIS'] },
+            'ホーリードラゴン': { name: 'ホーリードラゴン', imgPaths: ['魔法タイプモンスター/ホーリードラゴン.png', '魔法タイプ モンスター/ホーリードラゴン.png', 'ホーリードラゴン.png'], maxHp: 95, maxMp: 85, atk: 10, matk: 24, spd: 11, luk: 3, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['ATK_DOWN', 'DEF_DOWN'] },
+            '賢者の石': { name: '賢者の石', imgPaths: ['魔法タイプモンスター/賢者の石.png', '魔法タイプ モンスター/賢者の石.png', '賢者の石.png'], maxHp: 85, maxMp: 120, atk: 2, matk: 25, spd: 7, luk: 4, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['ATK_DOWN', 'CONFUSION', 'PARALYSIS'] }
+        };
+
+        const imageCache = {};
+        const imageStatus = {};
+
+        function loadMonsterImage(key) {
+            const paths = masterMons[key].imgPaths;
+            let pathIdx = 0;
+            const img = new Image();
+            function tryNextPath() {
+                if (pathIdx < paths.length) {
+                    img.src = paths[pathIdx++];
+                } else {
+                    imageStatus[key] = 'error';
+                }
+            }
+            img.onload = () => { imageStatus[key] = 'loaded'; };
+            img.onerror = () => { tryNextPath(); };
+            imageCache[key] = img;
+            tryNextPath();
+        }
+        for (let key in masterMons) loadMonsterImage(key);
+
+        // 背景画像「背景01.png」
+        const bgImage = new Image();
+        bgImage.src = '背景01.png';
+        let bgLoaded = false;
+        bgImage.onload = () => { bgLoaded = true; };
+
+        // --- Canvas 描画 & ポップアップ数値アニメーション ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 敵キャラクターのサイズを1.8倍に拡大 (220px → 396px)
+        // 拡大に合わせて中央寄せ位置 (x, y) および台座・ダメージ数値の座標を調整
+        const drawState = {
+            enemy: { x: -3, y: 130, width: 396, height: 396, shake: 0 },
+            playerDamagePopups: [],
+            enemyDamagePopups: []
+        };
+
+        function addPopUp(target, text, color = '#ff5555') {
+            const pop = { text, x: 195, y: target === 'enemy' ? 280 : 480, alpha: 1.0, color };
+            if (target === 'enemy') drawState.enemyDamagePopups.push(pop);
+            else drawState.playerDamagePopups.push(pop);
+        }
+
+        function triggerShake() { drawState.enemy.shake = 16; }
+
+        function drawFallbackBackground() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#0a0e17'); grad.addColorStop(0.5, '#162436'); grad.addColorStop(1, '#1b2a38');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 中央の敵台座（1.8倍拡大時の重心に合わせて調整）
+            ctx.save();
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+            ctx.strokeStyle = 'rgba(231, 76, 60, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(195, 460, 160, 36, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function mainLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (bgLoaded) {
+                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                drawFallbackBackground();
+            }
+
+            // 敵キャラクター描画
+            let eOffsetX = 0;
+            if (drawState.enemy.shake > 0) {
+                eOffsetX = (Math.random() - 0.5) * drawState.enemy.shake;
+                drawState.enemy.shake *= 0.85;
+                if (drawState.enemy.shake < 0.5) drawState.enemy.shake = 0;
+            }
+
+            if (enemy && enemy.hp > 0) {
+                const status = imageStatus[enemy.name];
+                const img = imageCache[enemy.name];
+                if (status === 'loaded' && img && img.complete && img.naturalWidth !== 0) {
+                    ctx.drawImage(img, drawState.enemy.x + eOffsetX, drawState.enemy.y, drawState.enemy.width, drawState.enemy.height);
+                } else {
+                    ctx.fillStyle = enemy.attr === 'ATK' ? '#e74c3c' : (enemy.attr === 'MAG' ? '#9b59b6' : '#2980b9');
+                    ctx.beginPath();
+                    ctx.roundRect(drawState.enemy.x + eOffsetX + 20, drawState.enemy.y + 20, drawState.enemy.width - 40, drawState.enemy.height - 40, 20);
+                    ctx.fill();
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+                    ctx.fillText(enemy.name, drawState.enemy.x + eOffsetX + drawState.enemy.width / 2, drawState.enemy.y + drawState.enemy.height / 2);
+                }
+            }
+
+            // ポップアップ数値の更新描画
+            [drawState.enemyDamagePopups, drawState.playerDamagePopups].forEach(list => {
+                for (let i = list.length - 1; i >= 0; i--) {
+                    const p = list[i];
+                    ctx.save();
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.alpha;
+                    ctx.font = 'bold 26px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(p.text, p.x, p.y);
+                    ctx.restore();
+
+                    p.y -= 1;
+                    p.alpha -= 0.02;
+                    if (p.alpha <= 0) list.splice(i, 1);
+                }
+            });
+
+            requestAnimationFrame(mainLoop);
+        }
+
+        // --- ルール＆ターン制御 ---
+        const debuffDefs = {
+            'ATK_DOWN': { name: '攻撃ダウン' }, 'DEF_DOWN': { name: '防御ダウン' },
+            'CONFUSION': { name: '混乱' }, 'PARALYSIS': { name: '麻痺' }
+        };
+        const cmdNames = { 'ATK': 'こうげき', 'MAG': '魔法', 'BRR': 'バリア', 'CHG': 'チャージ' };
+        const allCmdKeys = ['ATK', 'MAG', 'BRR', 'CHG'];
+        const rpsMap = {
+            'ATK': { 'ATK': 0, 'MAG': -1, 'BRR': 1, 'CHG': 1 },
+            'MAG': { 'ATK': 1, 'MAG': 0, 'BRR': -1, 'CHG': 1 },
+            'BRR': { 'ATK': -1, 'MAG': 1, 'BRR': 0, 'CHG': 1 },
+            'CHG': { 'ATK': -1, 'MAG': -1, 'BRR': -1, 'CHG': 0 }
+        };
+
+        let party = [];
+        let activeIndex = 0;
+        let enemy = {};
+        let isBattleEnd = false;
+        let lastPlayerCmd = null;
+        let enemyLastCmd = null;
+        let isFirstTurn = true;
+        let selectedSpellType = null;
+        let selectedPartyNames = [];
+        let isProcessingTurn = false;
+
+        const els = {
+            pName: document.getElementById('p-name'), pAttr: document.getElementById('p-attr'),
+            pHpBar: document.getElementById('p-hp-bar'), pMpBar: document.getElementById('p-mp-bar'),
+            pHpText: document.getElementById('p-hp-text'), pMpText: document.getElementById('p-mp-text'),
+            pIconBox: document.getElementById('p-icon-box'), pIconFallback: document.getElementById('p-icon-fallback'),
+            eName: document.getElementById('e-name'), eAttr: document.getElementById('e-attr'),
+            eHpBar: document.getElementById('e-hp-bar'), eHpText: document.getElementById('e-hp-text'),
+            eMpText: document.getElementById('e-mp-text'), enemyCmdList: document.getElementById('enemy-cmd-list'),
+            log: document.getElementById('log-area'), commandArea: document.getElementById('command-area'),
+            magicSelectArea: document.getElementById('magic-select-area'), magicButtons: document.getElementById('magic-buttons'),
+            startSelectArea: document.getElementById('start-select-area'), characterGrid: document.getElementById('character-grid'),
+            btnStartBattle: document.getElementById('btn-start-battle'), selectCount: document.getElementById('select-count'),
+            switchArea: document.getElementById('switch-area'), switchButtons: document.getElementById('switch-buttons'),
+            resetBtn: document.getElementById('reset-btn'),
+            matchupBanner: document.getElementById('matchup-banner'),
+            bannerPCmd: document.getElementById('banner-p-cmd'), bannerECmd: document.getElementById('banner-e-cmd'),
+            btns: { 'ATK': document.getElementById('btn-ATK'), 'MAG': document.getElementById('btn-MAG'), 'BRR': document.getElementById('btn-BRR'), 'CHG': document.getElementById('btn-CHG') }
+        };
+
+        function showStartSelect() {
+            playSE('click');
+            els.commandArea.style.display = 'none';
+            els.magicSelectArea.style.display = 'none';
+            els.switchArea.style.display = 'none';
+            els.resetBtn.style.display = 'none';
+            els.startSelectArea.style.display = 'block';
+            selectedPartyNames = [];
+            renderCharacterGrid();
+        }
+
+        function renderCharacterGrid() {
+            els.characterGrid.innerHTML = '';
+            els.selectCount.innerText = selectedPartyNames.length;
+            els.btnStartBattle.disabled = selectedPartyNames.length !== 3;
+
+            for (let name in masterMons) {
+                const m = masterMons[name];
+                const isSelected = selectedPartyNames.includes(name);
+                const card = document.createElement('div');
+                card.className = `select-card ${isSelected ? 'selected' : ''}`;
+                card.innerHTML = `<div>${m.name}</div>`;
+                card.onclick = () => {
+                    playSE('click');
+                    const idx = selectedPartyNames.indexOf(name);
+                    if (idx >= 0) selectedPartyNames.splice(idx, 1);
+                    else if (selectedPartyNames.length < 3) selectedPartyNames.push(name);
+                    renderCharacterGrid();
+                };
+                els.characterGrid.appendChild(card);
+            }
+        }
+
+        function confirmPartyAndStart() {
+            if (selectedPartyNames.length !== 3) return;
+            playSE('click');
+
+            party = selectedPartyNames.map(name => {
+                const m = masterMons[name];
+                let spellLvs = {}; m.spells.forEach(s => spellLvs[s] = 5);
+                return { ...m, hp: m.maxHp, mp: m.maxMp, charged: false, debuff: null, spellLevels: spellLvs };
+            });
+
+            const allNames = Object.keys(masterMons);
+            const enemyName = allNames[Math.floor(Math.random() * allNames.length)];
+            const eMaster = masterMons[enemyName];
+            let eSpellLvs = {}; eMaster.spells.forEach(s => eSpellLvs[s] = 3);
+            enemy = { ...eMaster, hp: eMaster.maxHp, mp: eMaster.maxMp, charged: false, debuff: null, spellLevels: eSpellLvs };
+
+            activeIndex = 0; isBattleEnd = false; lastPlayerCmd = null; enemyLastCmd = null; isFirstTurn = true;
+            els.startSelectArea.style.display = 'none';
+            els.commandArea.style.display = 'block';
+            els.log.innerHTML = '';
+
+            updateUi();
+            addLog(`<span class='log-system'>バトル開始！ ${enemy.name} が現れた！</span>`);
+        }
+
+        function updateUi() {
+            const curP = party[activeIndex];
+
+            els.pName.innerText = curP.name;
+            els.pAttr.innerText = curP.attrName;
+            els.pAttr.className = `attribute ${curP.attrClass}`;
+            els.pHpBar.style.width = (curP.hp / curP.maxHp * 100) + '%';
+            els.pMpBar.style.width = (curP.mp / curP.maxMp * 100) + '%';
+            els.pHpText.innerText = `${curP.hp}/${curP.maxHp}`;
+            els.pMpText.innerText = `${curP.mp}/${curP.maxMp}`;
+
+            const iconImg = imageCache[curP.name];
+            if (imageStatus[curP.name] === 'loaded' && iconImg) {
+                els.pIconBox.innerHTML = `<img src="${iconImg.src}">`;
+            } else {
+                els.pIconBox.innerHTML = `<span style="font-size:9px;">${curP.name[0]}</span>`;
+            }
+
+            els.eName.innerText = enemy.name;
+            els.eAttr.innerText = enemy.attrName;
+            els.eAttr.className = `attribute ${enemy.attrClass}`;
+            els.eHpBar.style.width = (enemy.hp / enemy.maxHp * 100) + '%';
+            els.eHpText.innerText = `HP: ${enemy.hp}/${enemy.maxHp}`;
+            els.eMpText.innerText = `MP: ${enemy.mp}/${enemy.maxMp}`;
+
+            // 敵の使用可能コマンド一覧（使えないコマンドは薄く表示）
+            els.enemyCmdList.innerHTML = '';
+            allCmdKeys.forEach(cmd => {
+                let isDisabled = false;
+                if (cmd === enemyLastCmd) isDisabled = true;
+                if (cmd === 'CHG' && isFirstTurn) isDisabled = true;
+                const badge = document.createElement('div');
+                badge.className = `enemy-cmd-badge ${isDisabled ? 'disabled' : ''}`;
+                badge.innerText = cmdNames[cmd];
+                els.enemyCmdList.appendChild(badge);
+            });
+
+            allCmdKeys.forEach(cmd => {
+                let disable = isProcessingTurn;
+                if (cmd === lastPlayerCmd) disable = true;
+                if (cmd === 'CHG' && isFirstTurn) disable = true;
+                els.btns[cmd].disabled = disable;
+            });
+        }
+
+        function addLog(msg) {
+            els.log.innerHTML += `<div>${msg}</div>`;
+            els.log.scrollTop = els.log.scrollHeight;
+        }
+
+        function openMagicMenu() {
+            if (isProcessingTurn) return;
+            playSE('click');
+            const curP = party[activeIndex];
+            els.commandArea.style.display = 'none';
+            els.magicSelectArea.style.display = 'block';
+            els.magicButtons.innerHTML = '';
+
+            curP.spells.forEach(spellKey => {
+                const btn = document.createElement('button');
+                btn.className = 'command-btn btn-magic';
+                btn.innerText = debuffDefs[spellKey].name;
+                btn.onclick = () => {
+                    selectedSpellType = spellKey;
+                    closeMagicMenu();
+                    playerAction('MAG');
+                };
+                els.magicButtons.appendChild(btn);
+            });
+        }
+
+        function closeMagicMenu() {
+            playSE('click');
+            els.magicSelectArea.style.display = 'none';
+            els.commandArea.style.display = 'block';
+        }
+
+        function selectEnemyCmd() {
+            let validCmds = allCmdKeys.filter(cmd => {
+                if (cmd === enemyLastCmd) return false;
+                if (cmd === 'CHG' && isFirstTurn) return false;
+                return true;
+            });
+            return validCmds[Math.floor(Math.random() * validCmds.length)];
+        }
+
+        function playerAction(pCmd) {
+            if (isProcessingTurn || isBattleEnd) return;
+            isProcessingTurn = true;
+            playSE('click');
+
+            const eCmd = selectEnemyCmd();
+            const curP = party[activeIndex];
+
+            // バナー演出
+            els.bannerPCmd.innerText = `【${cmdNames[pCmd]}】`;
+            els.bannerECmd.innerText = `【${cmdNames[eCmd]}】`;
+            els.bannerPCmd.className = 'cmd-display';
+            els.bannerECmd.className = 'cmd-display';
+            els.matchupBanner.style.display = 'flex';
+
+            setTimeout(() => {
+                const res = rpsMap[pCmd][eCmd];
+                if (res === 1) els.bannerPCmd.classList.add('highlight');
+                else if (res === -1) els.bannerECmd.classList.add('highlight');
+
+                setTimeout(() => {
+                    els.matchupBanner.style.display = 'none';
+                    resolveTurn(pCmd, eCmd);
+                }, 1000);
+            }, 600);
+        }
+
+        function calcDamage(attacker, defender, isMagic = false) {
+            let baseAtk = isMagic ? attacker.matk : attacker.atk;
+            if (attacker.debuff === 'ATK_DOWN') baseAtk = Math.floor(baseAtk * 0.7);
+            let pow = baseAtk * (isMagic ? 2.2 : 1.8);
+            if (attacker.charged) pow *= 2.0;
+
+            let defStat = defender.debuff === 'DEF_DOWN' ? 0.7 : 1.0;
+            let dmg = Math.floor(pow * (100 / (100 + 10 * defStat)));
+            return Math.max(1, dmg);
+        }
+
+        function resolveTurn(pCmd, eCmd) {
+            const curP = party[activeIndex];
+            const outcome = rpsMap[pCmd][eCmd];
+
+            // チャージ処理
+            if (pCmd === 'CHG') curP.charged = true;
+            if (eCmd === 'CHG') enemy.charged = true;
+
+            // プレイヤー勝利
+            if (outcome === 1) {
+                if (pCmd === 'ATK') {
+                    playSE('attack');
+                    triggerShake();
+                    let dmg = calcDamage(curP, enemy, false);
+                    enemy.hp = Math.max(0, enemy.hp - dmg);
+                    addPopUp('enemy', `-${dmg}`);
+                    addLog(`<span class='log-player'>${curP.name} の攻撃！ ${enemy.name} に ${dmg} のダメージ！</span>`);
+                } else if (pCmd === 'MAG') {
+                    playSE('magic');
+                    triggerShake();
+                    let dmg = calcDamage(curP, enemy, true);
+                    enemy.hp = Math.max(0, enemy.hp - dmg);
+                    if (selectedSpellType) enemy.debuff = selectedSpellType;
+                    addPopUp('enemy', `-${dmg}`, '#e8a7f5');
+                    addLog(`<span class='log-player'>${curP.name} の魔法！ ${enemy.name} に ${dmg} のダメージ！</span>`);
+                } else if (pCmd === 'BRR') {
+                    playSE('click');
+                    let dmg = Math.floor(calcDamage(curP, enemy, false) * 0.8);
+                    enemy.hp = Math.max(0, enemy.hp - dmg);
+                    addPopUp('enemy', `-${dmg}`, '#85c1e9');
+                    addLog(`<span class='log-player'>${curP.name} のバリアカウンター！ ${enemy.name} に ${dmg} のダメージ！</span>`);
+                } else if (pCmd === 'CHG') {
+                    addLog(`<span class='log-player'>${curP.name} はパワーをためている！</span>`);
+                }
+                if (pCmd !== 'CHG') curP.charged = false;
+            }
+            // 敵の勝利
+            else if (outcome === -1) {
+                if (eCmd === 'ATK') {
+                    playSE('attack');
+                    let dmg = calcDamage(enemy, curP, false);
+                    curP.hp = Math.max(0, curP.hp - dmg);
+                    addPopUp('player', `-${dmg}`);
+                    addLog(`<span class='log-enemy'>${enemy.name} の攻撃！ ${curP.name} に ${dmg} のダメージ！</span>`);
+                } else if (eCmd === 'MAG') {
+                    playSE('magic');
+                    let dmg = calcDamage(enemy, curP, true);
+                    curP.hp = Math.max(0, curP.hp - dmg);
+                    addPopUp('player', `-${dmg}`, '#e8a7f5');
+                    addLog(`<span class='log-enemy'>${enemy.name} の魔法！ ${curP.name} に ${dmg} のダメージ！</span>`);
+                } else if (eCmd === 'BRR') {
+                    let dmg = Math.floor(calcDamage(enemy, curP, false) * 0.8);
+                    curP.hp = Math.max(0, curP.hp - dmg);
+                    addPopUp('player', `-${dmg}`, '#85c1e9');
+                    addLog(`<span class='log-enemy'>${enemy.name} のバリアカウンター！ ${curP.name} に ${dmg} のダメージ！</span>`);
+                } else if (eCmd === 'CHG') {
+                    addLog(`<span class='log-enemy'>${enemy.name} はパワーをためている！</span>`);
+                }
+                if (eCmd !== 'CHG') enemy.charged = false;
+            }
+            // 引き分け
+            else {
+                addLog(`<span class='log-system'>お互いの手が相殺した！</span>`);
+            }
+
+            lastPlayerCmd = pCmd;
+            enemyLastCmd = eCmd;
+            isFirstTurn = false;
+
+            // 勝敗判定
+            if (enemy.hp <= 0) {
+                playSE('win');
+                addLog(`<span class='log-win'>勝利！ ${enemy.name} を倒した！</span>`);
+                isBattleEnd = true;
+                els.commandArea.style.display = 'none';
+                els.resetBtn.style.display = 'block';
+            } else if (curP.hp <= 0) {
+                addLog(`<span class='log-lose'>${curP.name} は倒れた！</span>`);
+                checkPartySwitch();
+            }
+
+            isProcessingTurn = false;
+            updateUi();
+        }
+
+        function checkPartySwitch() {
+            const aliveIndex = party.findIndex(m => m.hp > 0);
+            if (aliveIndex === -1) {
+                addLog(`<span class='log-lose'>全滅した... 敗北。</span>`);
+                isBattleEnd = true;
+                els.commandArea.style.display = 'none';
+                els.resetBtn.style.display = 'block';
+            } else {
+                els.commandArea.style.display = 'none';
+                els.switchArea.style.display = 'block';
+                els.switchButtons.innerHTML = '';
+
+                party.forEach((m, idx) => {
+                    if (m.hp > 0) {
+                        const btn = document.createElement('button');
+                        btn.className = 'command-btn btn-switch';
+                        btn.innerText = `${m.name} に交代 (HP:${m.hp})`;
+                        btn.onclick = () => {
+                            playSE('click');
+                            activeIndex = idx;
+                            lastPlayerCmd = null;
+                            els.switchArea.style.display = 'none';
+                            els.commandArea.style.display = 'block';
+                            addLog(`<span class='log-system'>ゆけっ！ ${m.name}！</span>`);
+                            updateUi();
+                        };
+                        els.switchButtons.appendChild(btn);
+                    }
+                });
+            }
+        }
+
+        // 初期起動
+        showStartSelect();
+        requestAnimationFrame(mainLoop);
+    </script>
+</body>
+</html>

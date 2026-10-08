@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=800">
+    <title>エレモン Battle Prototype v3.4 - PC Browser Edition</title>
+    <style>
+        /* PCブラウザ向け固定レイアウト＆背景デザイン */
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #0b0c10;
+            background-image: 
+                radial-gradient(circle at 50% 30%, #1f2833 0%, transparent 70%),
+                linear-gradient(to bottom, #0b0c10 0%, #1f2833 100%);
+            color: #ffffff;
+            font-family: 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin: 0 0 12px 0;
+            font-size: 22px;
+            color: #ffd700;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.6), 2px 2px 0 #000;
+            letter-spacing: 1px;
+        }
+
+        /* 800x450固定画面枠 */
+        #game-wrapper {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            border: 2px solid #45a29e;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9), 0 0 15px rgba(69, 162, 158, 0.3);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 800px;
+            height: 450px;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+            height: 450px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+
+        .status-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .status-box {
+            background: rgba(11, 12, 16, 0.88);
+            border: 1px solid #66fcf1;
+            padding: 6px 10px;
+            border-radius: 6px;
+            width: 240px;
+            backdrop-filter: blur(4px);
+            box-sizing: border-box;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .status-box.player-box { border-color: #45a29e; }
+        .status-box.enemy-box { border-color: #e74c3c; }
+
+        .character-name {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .attribute { font-size: 10px; padding: 1px 5px; border-radius: 3px; color: white; font-weight: normal; }
+        .at-attack { background-color: #e74c3c; }
+        .at-magic { background-color: #9b59b6; }
+        .at-barrier { background-color: #2980b9; }
+
+        .stat-row { display: flex; justify-content: space-between; font-size: 10px; color: #c5c6c7; margin: 1px 0; }
+        .hp-bar-container { background-color: #1f2833; width: 100%; height: 10px; border-radius: 5px; margin: 2px 0; overflow: hidden; border: 1px solid #000; }
+        .hp-bar { background-color: #2ecc71; height: 100%; width: 100%; transition: width 0.3s; }
+
+        .status-effects { font-size: 10px; color: #aaa; min-height: 1.1em; margin-top: 1px; }
+        .charged { color: #ffd700; font-weight: bold; }
+
+        #party-list { display: flex; gap: 4px; margin-top: 4px; font-size: 9px; }
+        .party-icon { padding: 2px 5px; background: #1f2833; border-radius: 3px; border: 1px solid #45a29e; color: #c5c6c7; }
+        .party-icon.active { border-color: #ffd700; background: #0b0c10; font-weight: bold; color: #ffd700; }
+        .party-icon.fainted { text-decoration: line-through; opacity: 0.4; background: #111; }
+
+        .bottom-panel {
+            display: flex;
+            gap: 12px;
+            height: 145px;
+            pointer-events: auto;
+        }
+
+        #log-area {
+            flex: 1;
+            background: rgba(11, 12, 16, 0.92);
+            border: 1px solid #45a29e;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 11px;
+            line-height: 1.45;
+            overflow-y: auto;
+            color: #c5c6c7;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        .log-player { color: #66fcf1; }
+        .log-enemy { color: #ff6b6b; }
+        .log-system { color: #aaa; font-style: italic; }
+        .log-win { color: #ffd700; font-weight: bold; }
+        .log-heal { color: #2ecc71; font-weight: bold; }
+        .log-mp { color: #3498db; font-weight: bold; }
+        .log-lose { color: #e74c3c; }
+        .log-special { color: #e67e22; font-weight: bold; }
+        .log-confused { color: #9b59b6; font-weight: bold; }
+        .log-lucky { color: #1abc9c; font-weight: bold; }
+
+        .action-container {
+            width: 330px;
+            background: rgba(11, 12, 16, 0.92);
+            border: 1px solid #45a29e;
+            border-radius: 6px;
+            padding: 8px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .command-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+        
+        .command-btn {
+            padding: 8px 4px;
+            font-size: 11px;
+            cursor: pointer;
+            border: 1px solid #45a29e;
+            border-radius: 5px;
+            background: #1f2833;
+            color: #ffffff;
+            transition: all 0.15s ease-in-out;
+            text-align: center;
+            font-weight: bold;
+        }
+        .command-btn:hover:not(:disabled) { background: #45a29e; color: #0b0c10; transform: scale(1.02); }
+        .command-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(80%); border-color: #333; pointer-events: none; }
+
+        .btn-attack { border-color: #e74c3c; color: #ff8b8b; }
+        .btn-attack:hover:not(:disabled) { background-color: #c0392b; color: #fff; }
+        .btn-magic { border-color: #9b59b6; color: #e8a7f5; }
+        .btn-magic:hover:not(:disabled) { background-color: #8e44ad; color: #fff; }
+        .btn-barrier { border-color: #2980b9; color: #85c1e9; }
+        .btn-barrier:hover:not(:disabled) { background-color: #2980b9; color: #fff; }
+        .btn-charge { border-color: #f1c40f; color: #f9e79f; }
+        .btn-charge:hover:not(:disabled) { background-color: #f39c12; color: #fff; }
+        .btn-switch { border-color: #2ecc71; color: #e8f8f5; background: #27ae60; font-weight: bold; width: 100%; }
+        .btn-switch:hover:not(:disabled) { background-color: #2ecc71; color: #0b0c10; }
+
+        #reset-btn {
+            display: none;
+            padding: 8px 20px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: auto;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+        }
+        #reset-btn:hover { background-color: #c0392b; }
+
+        .select-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            max-height: 90px;
+            overflow-y: auto;
+            width: 100%;
+            margin-bottom: 6px;
+        }
+        .select-card {
+            background: #1f2833;
+            border: 1px solid #45a29e;
+            border-radius: 4px;
+            padding: 3px;
+            font-size: 10px;
+            text-align: center;
+            cursor: pointer;
+            color: #c5c6c7;
+        }
+        .select-card:hover { border-color: #ffd700; background: #2c3e50; }
+        .select-card.selected { border-color: #ffd700; background: #0b0c10; color: #ffd700; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>エレモン Battle Prototype v3.4</h1>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+        <div id="ui-layer">
+            <div class="status-container">
+                <!-- プレイヤー -->
+                <div class="status-box player-box">
+                    <div class="character-name">
+                        <span id="p-name">-</span>
+                        <span id="p-attr" class="attribute at-attack">-</span>
+                    </div>
+                    <div class="hp-bar-container"><div id="p-hp-bar" class="hp-bar" style="width: 100%;"></div></div>
+                    <div class="stat-row"><span id="p-hp-text">HP: -/-</span><span id="p-mp-text">MP: -/-</span></div>
+                    <div id="p-stats-detail" class="stat-row">ATK:- MATK:- SPD:- LUK:-</div>
+                    <div id="p-status" class="status-effects"></div>
+                    <div id="party-list"></div>
+                </div>
+
+                <!-- 敵 -->
+                <div class="status-box enemy-box">
+                    <div class="character-name">
+                        <span id="e-name">-</span>
+                        <span id="e-attr" class="attribute at-barrier">-</span>
+                    </div>
+                    <div class="hp-bar-container"><div id="e-hp-bar" class="hp-bar" style="width: 100%;"></div></div>
+                    <div class="stat-row"><span id="e-hp-text">HP: -/-</span><span id="e-mp-text">MP: -/-</span></div>
+                    <div id="e-stats-detail" class="stat-row">ATK:- MATK:- SPD:- LUK:-</div>
+                    <div id="e-status" class="status-effects"></div>
+                </div>
+            </div>
+
+            <!-- 下部：ログ ＆ コマンドエリア -->
+            <div class="bottom-panel">
+                <div id="log-area"></div>
+
+                <div class="action-container">
+                    <div id="command-area" style="width: 100%;">
+                        <div style="font-size: 10px; color: #66fcf1; text-align: center; margin-bottom: 4px;">3すくみ: 攻撃＞バリア＞魔法＞攻撃</div>
+                        <div class="command-row">
+                            <button id="btn-ATK" class="command-btn btn-attack" onclick="playerAction('ATK')">攻撃</button>
+                            <button id="btn-MAG" class="command-btn btn-magic" onclick="openMagicMenu()">魔法...</button>
+                            <button id="btn-BRR" class="command-btn btn-barrier" onclick="playerAction('BRR')">バリア</button>
+                            <button id="btn-CHG" class="command-btn btn-charge" onclick="playerAction('CHG')">チャージ</button>
+                        </div>
+                    </div>
+
+                    <div id="magic-select-area" style="display: none; width: 100%;">
+                        <div style="font-size: 10px; color: #e8a7f5; text-align: center; margin-bottom: 4px;">使用する魔法（デバフ）を選択</div>
+                        <div id="magic-buttons" class="command-row" style="margin-bottom: 4px;"></div>
+                        <button class="command-btn" style="width: 100%; padding: 4px;" onclick="closeMagicMenu()">戻る</button>
+                    </div>
+
+                    <div id="start-select-area" style="display: none; width: 100%;">
+                        <div style="font-size: 10px; color: #ffd700; text-align: center; margin-bottom: 3px;">
+                            パーティを3体選択 (<span id="select-count">0</span>/3)
+                            <label for="magic-lv-select" style="margin-left:5px;">Lv:</label>
+                            <select id="magic-lv-select" style="background:#1f2833;color:#fff;border:1px solid #45a29e;font-size:9px;">
+                                <option value="1">1</option><option value="3">3</option><option value="5" selected>5</option>
+                            </select>
+                        </div>
+                        <div id="character-grid" class="select-grid"></div>
+                        <button id="btn-start-battle" class="command-btn btn-switch" style="padding: 5px;" disabled onclick="confirmPartyAndStart()">バトル開始</button>
+                    </div>
+
+                    <div id="switch-area" style="display: none; width: 100%;">
+                        <div style="font-size: 10px; color: #ffd700; text-align: center; margin-bottom: 4px;">繰り出すモンスターを選択</div>
+                        <div id="switch-buttons" style="display: flex; flex-direction: column; gap: 4px;"></div>
+                    </div>
+
+                    <button id="reset-btn" onclick="showStartSelect()">もう一度戦う</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SE 音声再生エンジン ---
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSE(type) {
+            initAudio();
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+
+            if (type === 'click') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, t); osc.frequency.exponentialRampToValueAtTime(400, t + 0.05);
+                gain.gain.setValueAtTime(0.2, t); gain.gain.linearRampToValueAtTime(0.01, t + 0.05);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.05);
+            } else if (type === 'attack') {
+                const bufferSize = audioCtx.sampleRate * 0.15;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(1000, t); filter.frequency.exponentialRampToValueAtTime(100, t + 0.15);
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.8, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                noise.start(t);
+            } else if (type === 'magic') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(300, t); osc.frequency.exponentialRampToValueAtTime(1200, t + 0.25);
+                gain.gain.setValueAtTime(0.4, t); gain.gain.linearRampToValueAtTime(0.01, t + 0.25);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.25);
+            } else if (type === 'barrier') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(500, t); osc.frequency.setValueAtTime(900, t + 0.08);
+                gain.gain.setValueAtTime(0.3, t); gain.gain.linearRampToValueAtTime(0.01, t + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.2);
+            } else if (type === 'charge') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, t); osc.frequency.exponentialRampToValueAtTime(600, t + 0.35);
+                gain.gain.setValueAtTime(0.15, t); gain.gain.linearRampToValueAtTime(0.4, t + 0.3); gain.gain.linearRampToValueAtTime(0.01, t + 0.35);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.35);
+            } else if (type === 'win') {
+                [523.25, 659.25, 783.99, 1046.50].forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    const startTime = t + idx * 0.1;
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(f, startTime);
+                    gain.gain.setValueAtTime(0.3, startTime); gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(startTime); osc.stop(startTime + 0.3);
+                });
+            } else if (type === 'lose') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, t); osc.frequency.linearRampToValueAtTime(80, t + 0.5);
+                gain.gain.setValueAtTime(0.4, t); gain.gain.linearRampToValueAtTime(0.01, t + 0.5);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.5);
+            }
+        }
+
+        // --- マスターデータ ---
+        const masterMons = {
+            'ファイター': { name: 'ファイター', imgPaths: ['アタックタイプ モンスター/ファイター.png', 'アタックタイプモンスター/ファイター.png', 'ファイター.png'], maxHp: 140, maxMp: 20, atk: 22, matk: 4, spd: 12, luk: 1, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['ATK_DOWN', 'DEF_DOWN'] },
+            'ナイト': { name: 'ナイト', imgPaths: ['アタックタイプ モンスター/ナイト.png', 'アタックタイプモンスター/ナイト.png', 'ナイト.png'], maxHp: 155, maxMp: 25, atk: 20, matk: 5, spd: 9, luk: 2, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['ATK_DOWN', 'DEF_DOWN'] },
+            'ギン': { name: 'ギン', imgPaths: ['アタックタイプ モンスター/ギン.png', 'アタックタイプモンスター/ギン.png', 'ギン.png'], maxHp: 125, maxMp: 30, atk: 24, matk: 6, spd: 16, luk: 4, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['ATK_DOWN', 'CONFUSION'] },
+            'ダイダラボッチ': { name: 'ダイダラボッチ', imgPaths: ['アタックタイプ モンスター/ダイダラボッチ.png', 'アタックタイプモンスター/ダイダラボッチ.png', 'ダイダラボッチ.png'], maxHp: 180, maxMp: 15, atk: 26, matk: 2, spd: 6, luk: 1, attr: 'ATK', attrName: 'アタック', attrClass: 'at-attack', spells: ['DEF_DOWN', 'PARALYSIS'] },
+
+            'セイメイ': { name: 'セイメイ', imgPaths: ['バリアタイプモンスター/セイメイ.png', 'バリアタイプ モンスター/セイメイ.png', 'セイメイ.png'], maxHp: 110, maxMp: 50, atk: 12, matk: 12, spd: 10, luk: 3, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['ATK_DOWN', 'DEF_DOWN', 'PARALYSIS'] },
+            '魔鏡': { name: '魔鏡', imgPaths: ['バリアタイプモンスター/魔鏡.png', 'バリアタイプ モンスター/魔鏡.png', '魔鏡.png'], maxHp: 120, maxMp: 55, atk: 8, matk: 14, spd: 8, luk: 2, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['DEF_DOWN', 'CONFUSION'] },
+            'EXE-000': { name: 'EXE-000', imgPaths: ['バリアタイプモンスター/EXE000.png', 'バリアタイプ モンスター/EXE000.png', 'EXE000.png'], maxHp: 135, maxMp: 45, atk: 15, matk: 10, spd: 11, luk: 1, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['ATK_DOWN', 'PARALYSIS'] },
+            'ピエロ': { name: 'ピエロ', imgPaths: ['バリアタイプモンスター/ピエロ.png', 'バリアタイプ モンスター/ピエロ.png', 'ピエロ.png'], maxHp: 160, maxMp: 60, atk: 13, matk: 13, spd: 10, luk: 2, attr: 'BRR', attrName: 'バリア', attrClass: 'at-barrier', spells: ['ATK_DOWN', 'DEF_DOWN', 'CONFUSION', 'PARALYSIS'] },
+
+            'ウィッチ': { name: 'ウィッチ', imgPaths: ['魔法タイプモンスター/ウィッチ.png', '魔法タイプ モンスター/ウィッチ.png', 'ウィッチ.png'], maxHp: 75, maxMp: 100, atk: 4, matk: 22, spd: 14, luk: 5, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['ATK_DOWN', 'DEF_DOWN', 'CONFUSION', 'PARALYSIS'] },
+            'ピクシー': { name: 'ピクシー', imgPaths: ['魔法タイプモンスター/ピクシー.png', '魔法タイプ モンスター/ピクシー.png', 'ピクシー.png'], maxHp: 70, maxMp: 110, atk: 3, matk: 20, spd: 18, luk: 6, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['CONFUSION', 'PARALYSIS'] },
+            'ホーリードラゴン': { name: 'ホーリードラゴン', imgPaths: ['魔法タイプモンスター/ホーリードラゴン.png', '魔法タイプ モンスター/ホーリードラゴン.png', 'ホーリードラゴン.png'], maxHp: 95, maxMp: 85, atk: 10, matk: 24, spd: 11, luk: 3, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['ATK_DOWN', 'DEF_DOWN'] },
+            '賢者の石': { name: '賢者の石', imgPaths: ['魔法タイプモンスター/賢者の石.png', '魔法タイプ モンスター/賢者の石.png', '賢者の石.png'], maxHp: 85, maxMp: 120, atk: 2, matk: 25, spd: 7, luk: 4, attr: 'MAG', attrName: '魔法', attrClass: 'at-magic', spells: ['ATK_DOWN', 'CONFUSION', 'PARALYSIS'] }
+        };
+
+        const imageCache = {};
+        const imageStatus = {};
+
+        function loadMonsterImage(key) {
+            const paths = masterMons[key].imgPaths;
+            let pathIdx = 0;
+            const img = new Image();
+            
+            function tryNextPath() {
+                if (pathIdx < paths.length) {
+                    img.src = paths[pathIdx];
+                    pathIdx++;
+                } else {
+                    imageStatus[key] = 'error';
+                }
+            }
+
+            img.onload = () => { imageStatus[key] = 'loaded'; };
+            img.onerror = () => { tryNextPath(); };
+
+            imageCache[key] = img;
+            tryNextPath();
+        }
+
+        for (let key in masterMons) {
+            loadMonsterImage(key);
+        }
+
+        // --- 背景画像の読み込みとランダム管理 ---
+        const bgSources = ['背景01.png', '背景02.png'];
+        const bgImages = {};
+        const bgStatus = {};
+        let currentBgImage = null;
+
+        bgSources.forEach(src => {
+            const img = new Image();
+            img.onload = () => { bgStatus[src] = true; };
+            img.onerror = () => { bgStatus[src] = false; };
+            img.src = src;
+            bgImages[src] = img;
+        });
+
+        function selectRandomBackground() {
+            const randomSrc = bgSources[Math.floor(Math.random() * bgSources.length)];
+            currentBgImage = bgImages[randomSrc];
+        }
+        
+        selectRandomBackground();
+
+        // --- Canvas 描画ループ ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const drawState = {
+            player: { x: 140, y: 120, width: 200, height: 220, shake: 0 },
+            enemy: { x: 480, y: 120, width: 200, height: 220, shake: 0 }
+        };
+
+        function triggerShake(target) {
+            if (target === 'player') drawState.player.shake = 12;
+            if (target === 'enemy') drawState.enemy.shake = 12;
+        }
+
+        function drawMonster(mon, x, y, width, height) {
+            if (!mon || !mon.name) return;
+            const status = imageStatus[mon.name];
+            const img = imageCache[mon.name];
+
+            if (status === 'loaded' && img && img.complete && img.naturalWidth !== 0) {
+                ctx.drawImage(img, x, y, width, height);
+            } else {
+                ctx.save();
+                ctx.fillStyle = mon.attr === 'ATK' ? 'rgba(231, 76, 60, 0.7)' : (mon.attr === 'MAG' ? 'rgba(155, 89, 182, 0.7)' : 'rgba(41, 128, 185, 0.7)');
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.roundRect(x + 20, y + 20, width - 40, height - 40, 15);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(mon.name, x + width / 2, y + height / 2);
+                ctx.restore();
+            }
+        }
+
+        function drawFallbackBackground() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#0f2027');
+            grad.addColorStop(0.5, '#203a43');
+            grad.addColorStop(1, '#2c5364');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(102, 252, 241, 0.08)';
+            ctx.beginPath();
+            ctx.ellipse(240, 310, 120, 25, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+            ctx.beginPath();
+            ctx.ellipse(580, 310, 120, 25, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function mainLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (currentBgImage && currentBgImage.complete && currentBgImage.naturalWidth !== 0) {
+                ctx.drawImage(currentBgImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                drawFallbackBackground();
+            }
+
+            let pOffsetX = 0;
+            if (drawState.player.shake > 0) {
+                pOffsetX = (Math.random() - 0.5) * drawState.player.shake;
+                drawState.player.shake *= 0.85;
+                if (drawState.player.shake < 0.5) drawState.player.shake = 0;
+            }
+
+            let eOffsetX = 0;
+            if (drawState.enemy.shake > 0) {
+                eOffsetX = (Math.random() - 0.5) * drawState.enemy.shake;
+                drawState.enemy.shake *= 0.85;
+                if (drawState.enemy.shake < 0.5) drawState.enemy.shake = 0;
+            }
+
+            const curP = party[activeIndex];
+            if (curP && curP.hp > 0) {
+                drawMonster(curP, drawState.player.x + pOffsetX, drawState.player.y, drawState.player.width, drawState.player.height);
+            }
+
+            if (enemy && enemy.hp > 0) {
+                drawMonster(enemy, drawState.enemy.x + eOffsetX, drawState.enemy.y, drawState.enemy.width, drawState.enemy.height);
+            }
+
+            requestAnimationFrame(mainLoop);
+        }
+
+        // --- ゲームルール設定 ---
+        const spellRates = { 1: 0.10, 2: 0.25, 3: 0.42, 4: 0.58, 5: 0.75 };
+
+        const debuffDefs = {
+            'ATK_DOWN': { name: '攻撃ダウン', desc: '与ダメージ半減' },
+            'DEF_DOWN': { name: '防御ダウン', desc: '被ダメージ15%増加' },
+            'CONFUSION': { name: '混乱', desc: 'コマンド暴発' },
+            'PARALYSIS': { name: '麻痺', desc: '50%で行動不能' }
+        };
+
+        const rpsMap = {
+            'ATK': { 'ATK': 0,  'MAG': -1, 'BRR': 1, 'CHG': 1 },
+            'MAG': { 'ATK': 1,  'MAG': 0,  'BRR': -1, 'CHG': 1 },
+            'BRR': { 'ATK': -1, 'MAG': 1,  'BRR': 0, 'CHG': 1 },
+            'CHG': { 'ATK': -1, 'MAG': -1, 'BRR': -1, 'CHG': 0 }
+        };
+
+        const cmdNames = { 'ATK': '攻撃', 'MAG': '魔法', 'BRR': 'バリア', 'CHG': 'チャージ' };
+        const allCmdKeys = ['ATK', 'MAG', 'BRR', 'CHG'];
+
+        let party = [];
+        let activeIndex = 0;
+        let enemy = {};
+        let isBattleEnd = false;
+        let lastPlayerCmd = null;
+        let enemyLastCmd = null;
+        let isFirstTurn = true;
+        let selectedSpellType = null;
+        let selectedPartyNames = [];
+
+        const els = {
+            pName: document.getElementById('p-name'), pAttr: document.getElementById('p-attr'),
+            pHpBar: document.getElementById('p-hp-bar'), pHpText: document.getElementById('p-hp-text'),
+            pMpText: document.getElementById('p-mp-text'),
+            pStatsDetail: document.getElementById('p-stats-detail'), pStatus: document.getElementById('p-status'),
+            partyList: document.getElementById('party-list'),
+            eName: document.getElementById('e-name'), eAttr: document.getElementById('e-attr'),
+            eHpBar: document.getElementById('e-hp-bar'), eHpText: document.getElementById('e-hp-text'),
+            eMpText: document.getElementById('e-mp-text'),
+            eStatsDetail: document.getElementById('e-stats-detail'), eStatus: document.getElementById('e-status'),
+            log: document.getElementById('log-area'),
+            commandArea: document.getElementById('command-area'),
+            magicSelectArea: document.getElementById('magic-select-area'),
+            magicButtons: document.getElementById('magic-buttons'),
+            startSelectArea: document.getElementById('start-select-area'),
+            characterGrid: document.getElementById('character-grid'),
+            btnStartBattle: document.getElementById('btn-start-battle'),
+            selectCount: document.getElementById('select-count'),
+            switchArea: document.getElementById('switch-area'),
+            switchButtons: document.getElementById('switch-buttons'),
+            resetBtn: document.getElementById('reset-btn'),
+            btns: {
+                'ATK': document.getElementById('btn-ATK'), 'MAG': document.getElementById('btn-MAG'),
+                'BRR': document.getElementById('btn-BRR'), 'CHG': document.getElementById('btn-CHG')
+            }
+        };
+
+        function showStartSelect() {
+            playSE('click');
+            els.commandArea.style.display = 'none';
+            els.magicSelectArea.style.display = 'none';
+            els.switchArea.style.display = 'none';
+            els.resetBtn.style.display = 'none';
+            els.startSelectArea.style.display = 'block';
+
+            selectedPartyNames = [];
+            renderCharacterGrid();
+        }
+
+        function renderCharacterGrid() {
+            els.characterGrid.innerHTML = '';
+            els.selectCount.innerText = selectedPartyNames.length;
+            els.btnStartBattle.disabled = selectedPartyNames.length !== 3;
+
+            for (let name in masterMons) {
+                const m = masterMons[name];
+                const isSelected = selectedPartyNames.includes(name);
+                const card = document.createElement('div');
+                card.className = `select-card ${isSelected ? 'selected' : ''}`;
+                card.innerHTML = `<div>${m.name}</div><div style="font-size:8px;color:#aaa;">${m.attrName}</div>`;
+                card.onclick = () => toggleSelectCharacter(name);
+                els.characterGrid.appendChild(card);
+            }
+        }
+
+        function toggleSelectCharacter(name) {
+            playSE('click');
+            const idx = selectedPartyNames.indexOf(name);
+            if (idx >= 0) {
+                selectedPartyNames.splice(idx, 1);
+            } else {
+                if (selectedPartyNames.length < 3) {
+                    selectedPartyNames.push(name);
+                }
+            }
+            renderCharacterGrid();
+        }
+
+        function confirmPartyAndStart() {
+            if (selectedPartyNames.length !== 3) return;
+            playSE('click');
+
+            selectRandomBackground();
+
+            const spellLv = parseInt(document.getElementById('magic-lv-select').value);
+
+            party = selectedPartyNames.map(name => {
+                const m = masterMons[name];
+                let spellLvs = {};
+                m.spells.forEach(s => spellLvs[s] = spellLv);
+                return { ...m, hp: m.maxHp, mp: m.maxMp, charged: false, debuff: null, spellLevels: spellLvs };
+            });
+
+            const allNames = Object.keys(masterMons);
+            const enemyName = allNames[Math.floor(Math.random() * allNames.length)];
+            const eMaster = masterMons[enemyName];
+
+            let eSpellLvs = {};
+            eMaster.spells.forEach(s => eSpellLvs[s] = 3);
+            enemy = { ...eMaster, hp: eMaster.maxHp, mp: eMaster.maxMp, charged: false, debuff: null, spellLevels: eSpellLvs };
+
+            activeIndex = 0;
+            isBattleEnd = false;
+            lastPlayerCmd = null;
+            enemyLastCmd = null;
+            isFirstTurn = true;
+
+            els.startSelectArea.style.display = 'none';
+            els.commandArea.style.display = 'block';
+            els.log.innerHTML = '';
+
+            updateUi();
+            addLog(`<span class='log-system'>バトル開始！野生の ${enemy.name} が現れた！</span>`);
+        }
+
+        function updateUi() {
+            const curP = party[activeIndex];
+
+            els.pName.innerText = curP.name;
+            els.pAttr.innerText = curP.attrName;
+            els.pAttr.className = `attribute ${curP.attrClass}`;
+            els.pHpBar.style.width = (curP.hp / curP.maxHp * 100) + '%';
+            els.pHpText.innerText = `HP: ${curP.hp}/${curP.maxHp}`;
+            els.pMpText.innerText = `MP: ${curP.mp}/${curP.maxMp}`;
+            els.pStatsDetail.innerText = `ATK:${curP.atk} MATK:${curP.matk} SPD:${curP.spd} LUK:${curP.luk}`;
+
+            let pStatusTxt = curP.charged ? '<span class="charged">[CHG]</span> ' : '';
+            if (curP.debuff) pStatusTxt += `<span class="log-enemy">[${curP.debuff.name}]</span> `;
+            els.pStatus.innerHTML = pStatusTxt;
+
+            els.partyList.innerHTML = '';
+            party.forEach((m, idx) => {
+                let cls = 'party-icon';
+                if (idx === activeIndex) cls += ' active';
+                if (m.hp <= 0) cls += ' fainted';
+                els.partyList.innerHTML += `<div class="${cls}">${m.name}</div>`;
+            });
+
+            els.eName.innerText = enemy.name;
+            els.eAttr.innerText = enemy.attrName;
+            els.eAttr.className = `attribute ${enemy.attrClass}`;
+            els.eHpBar.style.width = (enemy.hp / enemy.maxHp * 100) + '%';
+            els.eHpText.innerText = `HP: ${enemy.hp}/${enemy.maxHp}`;
+            els.eMpText.innerText = `MP: ${enemy.mp}/${enemy.maxMp}`;
+            els.eStatsDetail.innerText = `ATK:${enemy.atk} MATK:${enemy.matk} SPD:${enemy.spd} LUK:${enemy.luk}`;
+
+            let eStatusTxt = enemy.charged ? '<span class="charged">[CHG]</span> ' : '';
+            if (enemy.debuff) eStatusTxt += `<span class="log-enemy">[${enemy.debuff.name}]</span> `;
+            els.eStatus.innerHTML = eStatusTxt;
+
+            ['ATK', 'MAG', 'BRR', 'CHG'].forEach(cmd => {
+                let disable = false;
+                let titleText = "";
+                if (cmd === lastPlayerCmd) { disable = true; titleText = "連続使用不可"; }
+                if (cmd === 'CHG' && isFirstTurn) { disable = true; titleText = "初手使用不可"; }
+                els.btns[cmd].disabled = disable;
+                els.btns[cmd].title = titleText;
+            });
+        }
+
+        function addLog(msg) {
+            els.log.innerHTML += `<div>${msg}</div>`;
+            els.log.scrollTop = els.log.scrollHeight;
+        }
+
+        function openMagicMenu() {
+            playSE('click');
+            const curP = party[activeIndex];
+            els.commandArea.style.display = 'none';
+            els.magicSelectArea.style.display = 'block';
+            els.magicButtons.innerHTML = '';
+
+            curP.spells.forEach(spellKey => {
+                const def = debuffDefs[spellKey];
+                const lv = curP.spellLevels[spellKey] || 1;
+                const rate = Math.floor(spellRates[lv] * 100);
+                els.magicButtons.innerHTML += `
+                    <button class="command-btn btn-magic" onclick="selectMagic('${spellKey}')">
+                        ${def.name}<br><span style="font-size:8px;">(Lv${lv}:${rate}%)</span>
+                    </button>
+                `;
+            });
+        }
+
+        function closeMagicMenu() {
+            playSE('click');
+            els.magicSelectArea.style.display = 'none';
+            els.commandArea.style.display = 'block';
+        }
+
+        function selectMagic(spellKey) {
+            selectedSpellType = spellKey;
+            closeMagicMenu();
+            playerAction('MAG');
+        }
+
+        function calcSingleHitDamage(attacker, defender, isCharged, isMagic, scaleFactor = 1.0) {
+            let atkPower = isMagic ? attacker.matk : attacker.atk;
+            if (!isMagic && attacker.debuff && attacker.debuff.type === 'ATK_DOWN') {
+                atkPower *= 0.5;
+            }
+
+            let baseDmg = atkPower * (0.9 + Math.random() * 0.2) * scaleFactor;
+            if (isCharged) baseDmg *= 2.0;
+
+            if (defender.debuff && defender.debuff.type === 'DEF_DOWN') {
+                baseDmg *= 1.15;
+            }
+
+            let isCrit = Math.random() < 0.15;
+            if (isCrit) baseDmg *= 1.8;
+
+            return { damage: Math.max(1, Math.floor(baseDmg)), isCrit: isCrit };
+        }
+
+        function getMedianSpellRate(character) {
+            let lvs = Object.values(character.spellLevels);
+            if (lvs.length === 0) return 0.42;
+            lvs.sort((a, b) => a - b);
+            let midLv = lvs[Math.floor(lvs.length / 2)];
+            return spellRates[midLv] || 0.42;
+        }
+
+        function playCmdSE(cmd) {
+            if (cmd === 'ATK') playSE('attack');
+            else if (cmd === 'MAG') playSE('magic');
+            else if (cmd === 'BRR') playSE('barrier');
+            else if (cmd === 'CHG') playSE('charge');
+        }
+
+        // バリア反射処理を関数化
+        function processBarrierReflect(defender, attacker, spellType) {
+            let hit = calcSingleHitDamage(defender, attacker, defender.charged, true, 1.0);
+            attacker.hp = Math.max(0, attacker.hp - hit.damage);
+            triggerShake(attacker === party[activeIndex] ? 'player' : 'enemy');
+            addLog(`バリアカウンター：<span class='log-${attacker === party[activeIndex] ? 'player' : 'enemy'}'>${attacker.name}に ${hit.damage} のダメージ！</span>`);
+
+            if (defender.attr === 'MAG') {
+                let rec = Math.floor(Math.random() * 5) + 1;
+                if (Math.random() < 0.5) {
+                    defender.hp = Math.min(defender.maxHp, defender.hp + rec);
+                    addLog(`<span class='log-heal'>🛡 魔法バリア特典：HPが ${rec} 回復した！</span>`);
+                } else {
+                    defender.mp = Math.min(defender.maxMp, defender.mp + rec);
+                    addLog(`<span class='log-mp'>🛡️ 魔法バリア特典：MPが ${rec} 回復した！</span>`);
+                }
+            } else if (defender.attr === 'BRR') {
+                let usedMp = (Math.random() < (attacker.luk * 0.03)) ? 5 : 10;
+                if (attacker.mp >= usedMp) {
+                    attacker.mp -= usedMp;
+                    defender.hp = Math.min(defender.maxHp, defender.hp + usedMp);
+                    addLog(`<span class='log-heal'>🛡️ バリア反撃：相手の魔法MP(${usedMp})を吸収しHP回復！</span>`);
+                }
+                
+                let medRate = getMedianSpellRate(defender);
+                let luckGuard = attacker.luk * 0.01;
+                let finalRate = Math.max(0, medRate - luckGuard);
+
+                if (spellType && Math.random() < finalRate) {
+                    const def = debuffDefs[spellType];
+                    attacker.debuff = { name: def.name, type: spellType, turn: 3 };
+                    addLog(`<span class='log-special'>✨ 魔法【${def.name}】を反射して付与した！</span>`);
+                }
+            }
+            defender.charged = false;
+        }
+
+        // --- ターン進行メイン処理 ---
+        function playerAction(pCmd) {
+            if (isBattleEnd || pCmd === lastPlayerCmd || (pCmd === 'CHG' && isFirstTurn)) return;
+
+            const curP = party[activeIndex];
+            lastPlayerCmd = pCmd;
+
+            addLog(`------------------------------`);
+
+            let intendedPCmd = pCmd; // プレイヤーが元々選んだコマンド
+            let actualPCmd = pCmd;
+            let playerActionFailed = false;
+
+            if (curP.debuff && curP.debuff.type === 'CONFUSION') {
+                addLog(`<span class='log-confused'>🌀 ${curP.name}は混乱している！</span>`);
+                if (Math.random() < 0.5) {
+                    actualPCmd = allCmdKeys[Math.floor(Math.random() * allCmdKeys.length)];
+                    if (actualPCmd === 'MAG') selectedSpellType = curP.spells[Math.floor(Math.random() * curP.spells.length)];
+                    addLog(`<span class='log-confused'>頭が錯乱して『${cmdNames[actualPCmd]}』を出してしまった！</span>`);
+                }
+            }
+
+            if (actualPCmd === 'MAG' && !selectedSpellType) {
+                selectedSpellType = curP.spells[Math.floor(Math.random() * curP.spells.length)];
+            }
+
+            playCmdSE(actualPCmd);
+
+            // 麻痺判定
+            if (curP.debuff && curP.debuff.type === 'PARALYSIS') {
+                addLog(`<span class='log-confused'>⚡ ${curP.name}は体に痺れが走っている！</span>`);
+                if (Math.random() < 0.5) {
+                    addLog(`<span class='log-lose'>身体が麻痺して動きがとれない！技が失敗した！</span>`);
+                    playerActionFailed = true;
+                }
+            }
+
+            // 敵コマンド決定
+            let validEnemyCmds = ['ATK', 'MAG', 'BRR', 'CHG'].filter(c => c !== enemyLastCmd);
+            if (isFirstTurn) validEnemyCmds = validEnemyCmds.filter(c => c !== 'CHG');
+            let eCmd = validEnemyCmds[Math.floor(Math.random() * validEnemyCmds.length)];
+
+            if (enemy.debuff && enemy.debuff.type === 'CONFUSION') {
+                addLog(`<span class='log-confused'>🌀 ${enemy.name}は混乱している！</span>`);
+                if (Math.random() < 0.5) {
+                    eCmd = validEnemyCmds[Math.floor(Math.random() * validEnemyCmds.length)];
+                    addLog(`<span class='log-confused'>${enemy.name}も錯乱している！</span>`);
+                }
+            }
+
+            let eParalyzed = false;
+            if (enemy.debuff && enemy.debuff.type === 'PARALYSIS') {
+                addLog(`<span class='log-confused'>⚡ ${enemy.name}は麻痺している！</span>`);
+                if (Math.random() < 0.5) {
+                    addLog(`<span class='log-win'>${enemy.name}は麻痺して動けない！</span>`);
+                    eParalyzed = true;
+                }
+            }
+
+            enemyLastCmd = eCmd;
+            isFirstTurn = false;
+
+            let enemySpellType = enemy.spells[Math.floor(Math.random() * enemy.spells.length)];
+
+            // プレイヤーが麻痺または混乱失敗などで行動不能の時の処理
+            if (playerActionFailed) {
+                // 魔法を選択しようとしていて行動不能になり、相手がバリアだった場合はバリアダメージを受ける
+                if ((intendedPCmd === 'MAG' || actualPCmd === 'MAG') && eCmd === 'BRR' && !eParalyzed) {
+                    addLog(`<span class='log-lose'>${curP.name}は魔法を不発させたが、相手のバリアの餌食となった！</span>`);
+                    processBarrierReflect(enemy, curP, selectedSpellType || enemySpellType);
+                } else if (!eParalyzed) {
+                    enemyTurnActionOnly(curP);
+                }
+                turnEndProcess(actualPCmd, eCmd);
+                updateUi();
+                checkBattleStatus();
+                return;
+            }
+
+            let pCmdName = cmdNames[actualPCmd];
+            if (actualPCmd === 'MAG' && selectedSpellType) pCmdName += `(${debuffDefs[selectedSpellType].name})`;
+            addLog(`<span class='log-player'>【味方】${curP.name}の『${pCmdName}』！</span>`);
+
+            let eCmdName = cmdNames[eCmd];
+            if (eCmd === 'MAG') eCmdName += `(${debuffDefs[enemySpellType].name})`;
+            addLog(`<span class='log-enemy'>【相手】${enemy.name}は『${eCmdName}』を出した！</span>`);
+
+            if (eParalyzed) {
+                // 相手が麻痺して動けない場合
+                processPlayerSoloAttack(actualPCmd, curP);
+                turnEndProcess(actualPCmd, eCmd);
+                updateUi();
+                checkBattleStatus();
+                return;
+            }
+
+            // チャージ時の回復量（最大HPの10%以内）
+            if (actualPCmd === 'CHG' && eCmd === 'CHG') {
+                curP.charged = true;
+                enemy.charged = true;
+                curP.hp = Math.min(curP.maxHp, curP.hp + Math.floor(curP.maxHp * 0.1));
+                curP.mp = Math.min(curP.maxMp, curP.mp + Math.floor(curP.maxMp * 0.3));
+                enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(enemy.maxHp * 0.1));
+                enemy.mp = Math.min(enemy.maxMp, enemy.mp + Math.floor(enemy.maxMp * 0.3));
+                addLog(`<span class='log-win'>お互いに力を溜め合った！（次ターン攻撃2倍＆回復）</span>`);
+                turnEndProcess(actualPCmd, eCmd);
+                updateUi();
+                checkBattleStatus();
+                return;
+            }
+
+            if (actualPCmd === 'CHG') {
+                curP.charged = true;
+                curP.hp = Math.min(curP.maxHp, curP.hp + Math.floor(curP.maxHp * 0.1));
+                curP.mp = Math.min(curP.maxMp, curP.mp + Math.floor(curP.maxMp * 0.3));
+                addLog(`<span class='log-win'>★ ${curP.name}は力を溜めた！（次ターン攻撃2倍＆回復）</span>`);
+
+                let hit = calcSingleHitDamage(enemy, curP, enemy.charged, eCmd === 'MAG', 1.0);
+                curP.hp = Math.max(0, curP.hp - hit.damage);
+                enemy.charged = false;
+                triggerShake('player');
+                addLog(`相手の『${eCmdName}』の被弾：<span class='log-player'>${curP.name}に ${hit.damage} のダメージ！</span>`);
+
+                turnEndProcess(actualPCmd, eCmd);
+                updateUi();
+                checkBattleStatus();
+                return;
+            }
+
+            if (eCmd === 'CHG') {
+                enemy.charged = true;
+                enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(enemy.maxHp * 0.1));
+                enemy.mp = Math.min(enemy.maxMp, enemy.mp + Math.floor(enemy.maxMp * 0.3));
+                addLog(`<span class='log-enemy'>★ ${enemy.name}は力を溜めた！（次ターン攻撃2倍＆回復）</span>`);
+
+                let hit = calcSingleHitDamage(curP, enemy, curP.charged, actualPCmd === 'MAG', 1.0);
+                enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                curP.charged = false;
+                triggerShake('enemy');
+                addLog(`味方の『${pCmdName}』の命中：<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+
+                turnEndProcess(actualPCmd, eCmd);
+                updateUi();
+                checkBattleStatus();
+                return;
+            }
+
+            const result = rpsMap[actualPCmd][eCmd];
+
+            if (result === 1) {
+                addLog(`<span class='log-win'>★ 味方の勝利！</span>`);
+
+                if (actualPCmd === 'ATK') {
+                    let attackType = 'NORMAL';
+                    const roll = Math.random();
+                    if (curP.attr === 'ATK') {
+                        if (roll < 0.33) attackType = 'NORMAL';
+                        else if (roll < 0.66) attackType = 'DOUBLE';
+                        else attackType = 'TRIPLE';
+                    } else {
+                        if (roll < 0.5) attackType = 'NORMAL';
+                        else attackType = 'DOUBLE';
+                    }
+
+                    if (attackType === 'NORMAL') {
+                        let hit = calcSingleHitDamage(curP, enemy, curP.charged, false, 1.0);
+                        enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                        triggerShake('enemy');
+                        addLog(`「アタック」：<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+                    } else if (attackType === 'DOUBLE') {
+                        addLog(`<span class='log-special'>「Wアタック」発動！</span>`);
+                        for (let i = 0; i < 2; i++) {
+                            if (enemy.hp <= 0) break;
+                            let hit = calcSingleHitDamage(curP, enemy, curP.charged, false, 0.5);
+                            enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                            triggerShake('enemy');
+                            addLog(`（${i+1}撃目）<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+                        }
+                    } else if (attackType === 'TRIPLE') {
+                        addLog(`<span class='log-special'>「Tアタック」発動！</span>`);
+                        for (let i = 0; i < 3; i++) {
+                            if (enemy.hp <= 0) break;
+                            let hit = calcSingleHitDamage(curP, enemy, curP.charged, false, 0.5);
+                            enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                            triggerShake('enemy');
+                            addLog(`（${i+1}撃目）<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+                        }
+                    }
+
+                } else if (actualPCmd === 'MAG') {
+                    let hit = calcSingleHitDamage(curP, enemy, curP.charged, true, 1.0);
+                    enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                    triggerShake('enemy');
+                    addLog(`魔法ダメージ：<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+                    tryApplySpell(curP, enemy, selectedSpellType);
+
+                } else if (actualPCmd === 'BRR') {
+                    processBarrierReflect(curP, enemy, enemySpellType);
+                }
+                curP.charged = false;
+
+            } else if (result === 0) {
+                addLog(`<span class='log-system'>相殺！25%軽減（75%ダメージ）。速度判定中...</span>`);
+                
+                let playerFirst = curP.spd >= enemy.spd;
+                if (!playerFirst && Math.random() < (curP.luk * 0.02)) {
+                    playerFirst = true;
+                    addLog(`<span class='log-lucky'>🍀 LUK効果発動！${curP.name}は運良く先攻を奪い取った！</span>`);
+                }
+
+                if (playerFirst) {
+                    let hitP = calcSingleHitDamage(curP, enemy, curP.charged, actualPCmd === 'MAG', 0.75);
+                    enemy.hp = Math.max(0, enemy.hp - hitP.damage);
+                    triggerShake('enemy');
+                    addLog(`味方の先攻相殺攻撃：<span class='log-enemy'>${enemy.name}に ${hitP.damage} のダメージ！</span>`);
+                    if (actualPCmd === 'MAG') tryApplySpell(curP, enemy, selectedSpellType);
+
+                    if (enemy.hp > 0) {
+                        let hitE = calcSingleHitDamage(enemy, curP, enemy.charged, eCmd === 'MAG', 0.75);
+                        curP.hp = Math.max(0, curP.hp - hitE.damage);
+                        triggerShake('player');
+                        addLog(`相手の相殺反撃：<span class='log-player'>${curP.name}に ${hitE.damage} のダメージ！</span>`);
+                        if (eCmd === 'MAG') tryApplySpell(enemy, curP, enemySpellType);
+                    }
+                } else {
+                    let hitE = calcSingleHitDamage(enemy, curP, enemy.charged, eCmd === 'MAG', 0.75);
+                    curP.hp = Math.max(0, curP.hp - hitE.damage);
+                    triggerShake('player');
+                    addLog(`相手の先攻相殺攻撃：<span class='log-player'>${curP.name}に ${hitE.damage} のダメージ！</span>`);
+                    if (eCmd === 'MAG') tryApplySpell(enemy, curP, enemySpellType);
+
+                    if (curP.hp > 0) {
+                        let hitP = calcSingleHitDamage(curP, enemy, curP.charged, actualPCmd === 'MAG', 0.75);
+                        enemy.hp = Math.max(0, enemy.hp - hitP.damage);
+                        triggerShake('enemy');
+                        addLog(`味方の相殺反撃：<span class='log-enemy'>${enemy.name}に ${hitP.damage} のダメージ！</span>`);
+                        if (actualPCmd === 'MAG') tryApplySpell(curP, enemy, selectedSpellType);
+                    }
+                }
+                curP.charged = false;
+                enemy.charged = false;
+
+            } else {
+                addLog(`<span class='log-lose'>◆ 相手の勝利！</span>`);
+                let hitE = calcSingleHitDamage(enemy, curP, enemy.charged, eCmd === 'MAG', 1.0);
+                curP.hp = Math.max(0, curP.hp - hitE.damage);
+                triggerShake('player');
+                addLog(`相手の攻撃：<span class='log-player'>${curP.name}に ${hitE.damage} のダメージ！</span>`);
+                
+                if (eCmd === 'MAG') {
+                    tryApplySpell(enemy, curP, enemySpellType);
+                } else if (eCmd === 'BRR') {
+                    processBarrierReflect(enemy, curP, selectedSpellType);
+                }
+                enemy.charged = false;
+            }
+
+            turnEndProcess(actualPCmd, eCmd);
+            updateUi();
+            checkBattleStatus();
+        }
+
+        function tryApplySpell(caster, target, spellKey) {
+            let cost = 10;
+            if (Math.random() < (caster.luk * 0.03)) {
+                cost = 5;
+                addLog(`<span class='log-lucky'>🍀 LUK効果発動！${caster.name}は省エネ(消費MP5)で魔法を唱えた！</span>`);
+            }
+
+            if (caster.mp < cost) {
+                addLog(`<span class='log-system'>MPが足りずデバフ効果は付与できなかった！（MP:${caster.mp}/${cost}）</span>`);
+                return;
+            }
+
+            caster.mp -= cost;
+            addLog(`<span class='log-mp'>${caster.name}は ${cost} MPを消費した！</span>`);
+
+            const lv = caster.spellLevels[spellKey] || 1;
+            let baseRate = spellRates[lv];
+            let luckGuard = target.luk * 0.01;
+            let finalRate = Math.max(0, baseRate - luckGuard);
+
+            if (Math.random() < finalRate) {
+                const def = debuffDefs[spellKey];
+                target.debuff = { name: def.name, type: spellKey, turn: 3 };
+                addLog(`<span class='log-special'>✨ ${target.name}に【${def.name}】が付与された！（3ターン）</span>`);
+            } else {
+                if (luckGuard > 0 && Math.random() < (luckGuard / baseRate)) {
+                    addLog(`<span class='log-lucky'>🍀 ${target.name}はLUK効果によりデバフを間一髪で回避した！</span>`);
+                } else {
+                    addLog(`<span class='log-system'>デバフ付与は失敗した...</span>`);
+                }
+            }
+        }
+
+        function enemyTurnActionOnly(curP) {
+            let validEnemyCmds = ['ATK', 'MAG', 'BRR', 'CHG'].filter(c => c !== enemyLastCmd);
+            let eCmd = validEnemyCmds[Math.floor(Math.random() * validEnemyCmds.length)];
+            enemyLastCmd = eCmd;
+
+            playCmdSE(eCmd);
+
+            if (eCmd === 'CHG') {
+                enemy.charged = true;
+                enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(enemy.maxHp * 0.1));
+                enemy.mp = Math.min(enemy.maxMp, enemy.mp + Math.floor(enemy.maxMp * 0.3));
+                addLog(`<span class='log-enemy'>★ ${enemy.name}は力を溜めた！（次ターン攻撃2倍＆回復）</span>`);
+            } else {
+                let enemySpellType = enemy.spells[Math.floor(Math.random() * enemy.spells.length)];
+                let hitE = calcSingleHitDamage(enemy, curP, enemy.charged, eCmd === 'MAG', 1.0);
+                curP.hp = Math.max(0, curP.hp - hitE.damage);
+                enemy.charged = false;
+                triggerShake('player');
+                addLog(`相手の『${cmdNames[eCmd]}』の攻撃：<span class='log-player'>${curP.name}に ${hitE.damage} のダメージ！</span>`);
+                if (eCmd === 'MAG') tryApplySpell(enemy, curP, enemySpellType);
+            }
+        }
+
+        function processPlayerSoloAttack(actualPCmd, curP) {
+            if (actualPCmd === 'ATK') {
+                let hit = calcSingleHitDamage(curP, enemy, curP.charged, false, 1.0);
+                enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                triggerShake('enemy');
+                addLog(`無防備の相手に攻撃：<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+            } else if (actualPCmd === 'MAG') {
+                let hit = calcSingleHitDamage(curP, enemy, curP.charged, true, 1.0);
+                enemy.hp = Math.max(0, enemy.hp - hit.damage);
+                triggerShake('enemy');
+                addLog(`無防備の相手に魔法：<span class='log-enemy'>${enemy.name}に ${hit.damage} のダメージ！</span>`);
+                tryApplySpell(curP, enemy, selectedSpellType);
+            } else if (actualPCmd === 'BRR') {
+                addLog(`<span class='log-system'>相手が動けなかったためバリアは不発に終わった</span>`);
+            }
+            curP.charged = false;
+        }
+
+        function turnEndProcess(pCmd, eCmd) {
+            const curP = party[activeIndex];
+
+            if (pCmd !== 'MAG' && pCmd !== 'NONE') {
+                if (curP.mp < curP.maxMp) {
+                    curP.mp = Math.min(curP.maxMp, curP.mp + 1);
+                    addLog(`<span class='log-mp'>♥ ${curP.name}のMPが 1 回復した！</span>`);
+                }
+            }
+            if (eCmd !== 'MAG') {
+                if (enemy.mp < enemy.maxMp) enemy.mp = Math.min(enemy.maxMp, enemy.mp + 1);
+            }
+
+            [curP, enemy].forEach(char => {
+                if (char.debuff) {
+                    let cureChance = char.luk * 0.05;
+                    if (Math.random() < cureChance) {
+                        addLog(`<span class='log-lucky'>🍀 LUK効果発動！${char.name}の【${char.debuff.name}】が早期自然解除された！</span>`);
+                        char.debuff = null;
+                    } else {
+                        char.debuff.turn--;
+                        if (char.debuff.turn <= 0) {
+                            addLog(`<span class='log-system'>${char.name}の【${char.debuff.name}】が解けた！</span>`);
+                            char.debuff = null;
+                        }
+                    }
+                }
+            });
+
+            selectedSpellType = null;
+        }
+
+        function checkBattleStatus() {
+            const curP = party[activeIndex];
+
+            if (enemy.hp <= 0) {
+                isBattleEnd = true;
+                playSE('win');
+                addLog(`<div style="font-size: 15px; font-weight: bold; text-align: center; color: #ffd700; margin-top: 6px;">★ WIN ★ ${enemy.name} を倒した！勝利！</div>`);
+                els.commandArea.style.display = 'none';
+                els.magicSelectArea.style.display = 'none';
+                els.switchArea.style.display = 'none';
+                els.resetBtn.style.display = 'block';
+                return;
+            }
+
+            if (curP.hp <= 0) {
+                addLog(`<span class='log-lose'>◆ ${curP.name}はたおれた！</span>`);
+                const aliveMons = party.filter(m => m.hp > 0);
+                if (aliveMons.length > 0) {
+                    promptSwitch();
+                } else {
+                    isBattleEnd = true;
+                    playSE('lose');
+                    addLog(`<div style="font-size: 15px; font-weight: bold; text-align: center; color: #ff6b6b; margin-top: 6px;">◆ LOSE ◆ 全滅した...</div>`);
+                    els.commandArea.style.display = 'none';
+                    els.magicSelectArea.style.display = 'none';
+                    els.switchArea.style.display = 'none';
+                    els.resetBtn.style.display = 'block';
+                }
+            }
+        }
+
+        function promptSwitch() {
+            els.commandArea.style.display = 'none';
+            els.magicSelectArea.style.display = 'none';
+            els.switchArea.style.display = 'block';
+            els.switchButtons.innerHTML = '';
+
+            party.forEach((m, idx) => {
+                if (m.hp > 0 && idx !== activeIndex) {
+                    els.switchButtons.innerHTML += `
+                        <button class="command-btn btn-switch" onclick="switchMonster(${idx})">
+                            ${m.name} (HP:${m.hp}/${m.maxHp})
+                        </button>
+                    `;
+                }
+            });
+        }
+
+        function switchMonster(newIndex) {
+            playSE('click');
+            activeIndex = newIndex;
+            lastPlayerCmd = null;
+            isFirstTurn = true;
+            const newP = party[activeIndex];
+            addLog(`<span class='log-win'>ゆけっ！ ${newP.name}！</span>`);
+            
+            els.switchArea.style.display = 'none';
+            els.commandArea.style.display = 'block';
+            updateUi();
+        }
+
+        showStartSelect();
+        mainLoop();
+    </script>
+</body>
+</html>

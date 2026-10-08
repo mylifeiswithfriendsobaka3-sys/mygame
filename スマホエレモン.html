@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>エレモン - スマホ版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 480px; /* スマホ縦持ちに最適化 */
+            max-height: 853px;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<script>
+// --- 1. Base64 アセット管理 (背景画像を埋め込み済み) ---
+const BASE64_ASSETS = {
+    // 組み込まれた背景画像データ
+    bg: "data:image/png;base64,iVBORw0KGgoAAAANSU24AAAANSUhEUgAAA+gAAAUACAYAAABi0mInAAAACXBIWXMAAC4jAAAuIwF4pT92AAA8A0lEQVR42uzYx3XbSBoAYB5x33333Xfffbfvvrvvvvvuu24...（省略）", 
+
+    // モンスター画像（必要に応じてBase64文字列を追加可能）
+    'ファイター': "",
+    'ナイト': "",
+    'ギン': "",
+    'バスター': "",
+    'ビースト': "",
+    'ポイズン': "",
+    'パラディン': "",
+    'フレイム': "",
+    'アクア': "",
+    'ウィンド': "",
+    'ガイア': "",
+    'ボルト': "",
+    'ルクス': "",
+    'ノワール': "",
+    'バースト': "",
+    'ドレイク': "",
+    'サラマンダ': "",
+    'リヴァイア': "",
+    'ガルーダ': "",
+    'タイタン': "",
+    'ライジン': "",
+    'ソル': "",
+    'ルナ': ""
+};
+
+// 画像オブジェクトのキャッシュ
+const loadedImages = {};
+
+// --- 2. アセット読み込み処理 ---
+function loadAssets(callback) {
+    let totalAssets = 0;
+    let loadedCount = 0;
+
+    const keys = Object.keys(BASE64_ASSETS);
+    
+    // 読み込むべき画像があるかチェック
+    keys.forEach(key => {
+        if (BASE64_ASSETS[key]) totalAssets++;
+    });
+
+    if (totalAssets === 0) {
+        callback();
+        return;
+    }
+
+    keys.forEach(key => {
+        const src = BASE64_ASSETS[key];
+        if (src) {
+            const img = new Image();
+            img.onload = () => {
+                loadedCount++;
+                loadedImages[key] = img;
+                if (loadedCount === totalAssets) {
+                    callback();
+                }
+            };
+            img.onerror = () => {
+                console.warn(`画像の読み込みに失敗しました: ${key}`);
+                loadedCount++;
+                if (loadedCount === totalAssets) {
+                    callback();
+                }
+            };
+            img.src = src;
+        }
+    });
+}
+
+// --- 3. メインキャンバス・ゲームエンジン ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    const container = document.getElementById('game-container');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    draw(); // リサイズ時に再描画
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// 描画メインルーチン
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. 背景描画
+    if (loadedImages['bg']) {
+        // 背景画像をアスペクト比を保ちつつ画面いっぱいに描画
+        ctx.drawImage(loadedImages['bg'], 0, 0, canvas.width, canvas.height);
+    } else {
+        // フォールバック用グラデーション背景
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#111827');
+        grad.addColorStop(1, '#1f2937');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 2. モンスター／カード描画デモ（背景動作確認用）
+    drawMonsterCard('ファイター', canvas.width * 0.1, canvas.height * 0.3, canvas.width * 0.35, canvas.height * 0.25);
+    drawMonsterCard('ナイト', canvas.width * 0.55, canvas.height * 0.3, canvas.width * 0.35, canvas.height * 0.25);
+}
+
+// モンスターカード描画関数 (画像がない場合は自動フォールバック描画)
+function drawMonsterCard(name, x, y, width, height) {
+    ctx.save();
+    
+    // カード背景枠
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 2;
+    
+    // 角丸カード
+    const radius = 10;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    
+    ctx.fill();
+    ctx.stroke();
+
+    // モンスター画像が存在すれば描画、なければテキスト表示
+    if (loadedImages[name]) {
+        ctx.drawImage(loadedImages[name], x + 5, y + 5, width - 10, height - 10);
+    } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(name, x + width / 2, y + height / 2);
+    }
+
+    ctx.restore();
+}
+
+// --- 4. 初期化起動 ---
+window.onload = () => {
+    resizeCanvas();
+    loadAssets(() => {
+        draw();
+        console.log("アセットの読み込み完了・画面描画完了");
+    });
+};
+</script>
+
+</body>
+</html>
